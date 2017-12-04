@@ -21,7 +21,7 @@ pipeline {
         sh 'mkdir tmp'
         dir('tmp') {
           timestamps {
-            sh '../scripts/firedrake-install --disable-ssh --minimal-petsc ${SLEPC} --adjoint --slope --install thetis --install gusto --install pyadjoint ${PACKAGE_MANAGER} || (cat firedrake-install.log && /bin/false)'
+            sh '../scripts/firedrake-install --disable-ssh --minimal-petsc ${SLEPC} --adjoint --slope --documentation-dependencies --install thetis --install gusto --install pyadjoint ${PACKAGE_MANAGER} || (cat firedrake-install.log && /bin/false)'
           }
         }
       }
@@ -75,6 +75,18 @@ cd firedrake/src/dolfin-adjoint; python -m pytest -n 4 -v tests_firedrake
             sh '''
 . ./firedrake/bin/activate
 cd firedrake/src/pyadjoint; python -m pytest -v tests/firedrake_adjoint
+'''
+          }
+        }
+      }
+    }
+    stage('Test build documentation'){
+      steps {
+        dir('tmp') {
+          timestamps {
+            sh '''
+. ./firedrake/bin/activate
+cd firedrake/src/firedrake/docs; make html
 '''
           }
         }
