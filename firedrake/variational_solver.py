@@ -204,7 +204,6 @@ class NonlinearVariationalSolver(solving_utils.ParametersMixin):
         """
         # Make sure appcontext is attached to the DM before we solve.
         dm = self.snes.getDM()
-        dmhooks.push_appctx(dm, self._ctx)
         # Apply the boundary conditions to the initial guess.
         for bc in self._problem.bcs:
             bc.apply(self._problem.u)
@@ -216,12 +215,12 @@ class NonlinearVariationalSolver(solving_utils.ParametersMixin):
         work = self._work
         # Ensure options database has full set of options (so monitors work right)
         with self.inserted_options():
-            with self._problem.u.dat.vec as u:
-                u.copy(work)
-                self.snes.solve(None, work)
-                work.copy(u)
+            with dmhooks.appctx(dm, self._ctx):
+                with self._problem.u.dat.vec as u:
+                    u.copy(work)
+                    self.snes.solve(None, work)
+                    work.copy(u)
 
-        dmhooks.pop_appctx(dm)
         solving_utils.check_snes_convergence(self.snes)
 
 
