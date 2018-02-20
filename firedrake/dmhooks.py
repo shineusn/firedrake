@@ -138,17 +138,16 @@ class appctx(object):
 
     def __exit__(self, typ, value, traceback):
         ctx = self.ctx
-        dm = self.dm
-        W = get_function_space(dm)
         while ctx._coarse is not None:
             ctx = ctx._coarse
-            assert hasattr(W, "_coarse")
-            W = W._coarse
+
+        def get_dm(c):
+            return c._problem.u.function_space().dm
+
         while ctx._fine is not None:
-            assert hasattr(W, "_fine")
-            pop_appctx(W.dm, ctx)
+            dm = get_dm(ctx)
+            pop_appctx(dm, ctx)
             ctx = ctx._fine
-            W = W._fine
         pop_appctx(self.dm, self.ctx)
 
 
