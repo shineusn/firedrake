@@ -186,8 +186,9 @@ class NonlinearVariationalSolver(solving_utils.ParametersMixin):
         # DM with an app context in place so that if the DM is active
         # on a subKSP the context is available.
         dm = self.snes.getDM()
-        dmhooks.set_appctx(dm, self._ctx)
+        dmhooks.push_appctx(dm, self._ctx)
         self.set_from_options(self.snes)
+        dmhooks.pop_appctx(dm)
 
     def solve(self, bounds=None):
         """Solve the variational problem.
@@ -203,7 +204,7 @@ class NonlinearVariationalSolver(solving_utils.ParametersMixin):
         """
         # Make sure appcontext is attached to the DM before we solve.
         dm = self.snes.getDM()
-        dmhooks.set_appctx(dm, self._ctx)
+        dmhooks.push_appctx(dm, self._ctx)
         # Apply the boundary conditions to the initial guess.
         for bc in self._problem.bcs:
             bc.apply(self._problem.u)
@@ -220,6 +221,7 @@ class NonlinearVariationalSolver(solving_utils.ParametersMixin):
                 self.snes.solve(None, work)
                 work.copy(u)
 
+        dmhooks.pop_appctx(dm)
         solving_utils.check_snes_convergence(self.snes)
 
 
