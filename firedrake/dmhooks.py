@@ -177,6 +177,8 @@ def get_transfer_operators(dm):
     stack = dm.getAttr("__transfer__")
     if stack:
         prolong, restrict, inject = stack[-1]
+    else:
+        prolong, restrict, inject = None, None, None
 
     if prolong is None:
         prolong = firedrake.prolong
