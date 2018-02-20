@@ -97,7 +97,7 @@ def push_appctx(dm, ctx):
     stack.append(weakref.ref(ctx, finalize))
 
 
-def pop_appctx(dm):
+def pop_appctx(dm, match=None):
     """Pop the most recent application context from a DM.
 
     :arg DM: The DM.
@@ -106,7 +106,12 @@ def pop_appctx(dm):
     stack = dm.getAppCtx()
     if stack == [] or stack is None:
         return None
-    return stack.pop()()
+    ctx = stack[-1]()
+    if match is not None:
+        if ctx == match:
+            return stack.pop()()
+    else:
+        return stack.pop()()
 
 
 def get_appctx(dm):
@@ -121,6 +126,30 @@ def get_appctx(dm):
         return None
     else:
         return stack[-1]()
+
+
+class appctx(object):
+    def __init__(self, dm, ctx):
+        self.ctx = ctx
+        self.dm = dm
+
+    def __enter__(self):
+        push_appctx(self.dm, self.ctx)
+
+    def __exit__(self, typ, value, traceback):
+        ctx = self.ctx
+        dm = self.dm
+        W = get_function_space(dm)
+        while ctx._coarse is not None:
+            ctx = ctx._coarse
+            assert hasattr(W, "_coarse")
+            W = W._coarse
+        while ctx._fine is not None:
+            assert hasattr(W, "_fine")
+            pop_appctx(W.dm, ctx)
+            ctx = ctx._fine
+            W = W._fine
+        pop_appctx(self.dm, self.ctx)
 
 
 def create_matrix(dm):
@@ -239,6 +268,7 @@ def coarsen(dm, comm):
         push_appctx(cdm, coarsen(ctx))
         # Necessary for MG inside a fieldsplit in a SNES.
         cdm.setKSPComputeOperators(firedrake.solving_utils._SNESContext.compute_operators)
+    V._coarse._fine = V
     return cdm
 
 
@@ -260,6 +290,7 @@ def refine(dm, comm):
     else:
         V._fine = firedrake.FunctionSpace(hierarchy[level + 1], V.ufl_element())
         fdm = V._fine.dm
+    V._fine._coarse = V
     return fdm
 
 
