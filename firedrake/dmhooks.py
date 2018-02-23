@@ -158,18 +158,19 @@ class appctx(object):
         pop_appctx(self.dm, self.ctx)
 
 
-def push_transfer_operators(dm, prolong, restrict, inject):
+def push_transfer_operators(dm, transfer):
     stack = dm.getAttr("__transfer__")
     if stack is None:
         stack = []
         dm.setAttr("__transfer__", stack)
-    stack.append((prolong, restrict, inject))
+    stack.append(tuple(transfer))
 
 
 def pop_transfer_operators(dm, match=None):
     stack = dm.getAttr("__transfer__")
     if stack:
         if match is not None:
+            match = tuple(match)
             transfer = stack[-1]
             if transfer == match:
                 stack.pop()
@@ -205,16 +206,27 @@ class transfer_operators(object):
     :arg inject: injection fine -> coarse."""
     def __init__(self, V, prolong=None, restrict=None, inject=None):
         self.V = V
+        if prolong is None:
+            prolong = firedrake.prolong
+        if restrict is None:
+            restrict = firedrake.restrict
+        if inject is None:
+            inject = firedrake.inject
         self.transfer = prolong, restrict, inject
 
     def __enter__(self):
-        push_transfer_operators(self.V.dm, *self.transfer)
+        push_transfer_operators(self.V.dm, self.transfer)
+        V = self.V
+        while hasattr(V, "_coarse"):
+            V = V._coarse
+            push_transfer_operators(V.dm, self.transfer)
 
     def __exit__(self, typ, value, traceback):
         V = self.V
         while hasattr(V, "_coarse"):
             V = V._coarse
         while hasattr(V, "_fine"):
+            print("Popping")
             pop_transfer_operators(V.dm, match=self.transfer)
             V = V._fine
         pop_transfer_operators(self.V.dm, match=self.transfer)
@@ -333,7 +345,7 @@ def coarsen(dm, comm):
         cdm = V._coarse.dm
 
     transfer = get_transfer_operators(dm)
-    push_transfer_operators(cdm, *transfer)
+    push_transfer_operators(cdm, transfer)
     ctx = get_appctx(dm)
     if ctx is not None:
         push_appctx(cdm, coarsen(ctx))
