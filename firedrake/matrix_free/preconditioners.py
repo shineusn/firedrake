@@ -82,29 +82,34 @@ class AssembledPC(PCBase):
         from firedrake.assemble import allocate_matrix, create_assembly_callable
 
         _, P = pc.getOperators()
-
-        context = P.getPythonContext()
         prefix = pc.getOptionsPrefix()
 
-        # It only makes sense to preconditioner/invert a diagonal
-        # block in general.  That's all we're going to allow.
-        if not context.on_diag:
-            raise ValueError("Only makes sense to invert diagonal block")
+        if P.getType() != "python":
+            Pmat = P
+            self.python = False
+        else:
+            context = P.getPythonContext()
 
-        mat_type = PETSc.Options().getString(prefix + "assembled_mat_type", "aij")
-        self.P = allocate_matrix(context.a, bcs=context.row_bcs,
-                                 form_compiler_parameters=context.fc_params,
-                                 mat_type=mat_type)
-        self._assemble_P = create_assembly_callable(context.a, tensor=self.P,
-                                                    bcs=context.row_bcs,
-                                                    form_compiler_parameters=context.fc_params,
-                                                    mat_type=mat_type)
-        self._assemble_P()
-        self.mat_type = mat_type
-        self.P.force_evaluation()
+            # It only makes sense to preconditioner/invert a diagonal
+            # block in general.  That's all we're going to allow.
+            if not context.on_diag:
+                raise ValueError("Only makes sense to invert diagonal block")
+
+            mat_type = PETSc.Options().getString(prefix + "assembled_mat_type", "aij")
+            self.P = allocate_matrix(context.a, bcs=context.row_bcs,
+                                     form_compiler_parameters=context.fc_params,
+                                     mat_type=mat_type)
+            self._assemble_P = create_assembly_callable(context.a, tensor=self.P,
+                                                        bcs=context.row_bcs,
+                                                        form_compiler_parameters=context.fc_params,
+                                                        mat_type=mat_type)
+            self._assemble_P()
+            self.mat_type = mat_type
+            self.P.force_evaluation()
+            self.python = True
+            Pmat = self.P.petscmat
 
         # Transfer nullspace over
-        Pmat = self.P.petscmat
         Pmat.setNullSpace(P.getNullSpace())
         tnullsp = P.getTransposeNullSpace()
         if tnullsp.handle != 0:
@@ -121,8 +126,9 @@ class AssembledPC(PCBase):
         self.pc = pc
 
     def update(self, pc):
-        self._assemble_P()
-        self.P.force_evaluation()
+        if self.python:
+            self._assemble_P()
+            self.P.force_evaluation()
 
     def apply(self, pc, x, y):
         self.pc.apply(x, y)
