@@ -135,7 +135,7 @@ SplitKernel = collections.namedtuple("SplitKernel", ["indices",
                                                      "kinfo"])
 
 
-def compile_form(form, name, parameters=None, inverse=False):
+def compile_form(form, name, parameters=None, inverse=False, split=True):
     """Compile a form using TSFC.
 
     :arg form: the :class:`~ufl.classes.Form` to compile.
@@ -145,6 +145,7 @@ def compile_form(form, name, parameters=None, inverse=False):
          ``form_compiler`` slot of the Firedrake
          :data:`~.parameters` dictionary (which see).
     :arg inverse: If True then assemble the inverse of the local tensor.
+    :arg split: If ``False``, then don't split mixed forms.
 
     Returns a tuple of tuples of
     (index, integral type, subdomain id, coordinates, coefficients, needs_orientations, :class:`Kernels <pyop2.op2.Kernel>`).
@@ -185,6 +186,10 @@ def compile_form(form, name, parameters=None, inverse=False):
     # A map from all form coefficients to their number.
     coefficient_numbers = dict((c, n)
                                for (n, c) in enumerate(form.coefficients()))
+    if split:
+        iterable = split_form(form)
+    else:
+        iterable = [(0, )*len(form.arguments()), form]
     for idx, f in split_form(form):
         f = _real_mangle(f)
         # Map local coefficient numbers (as seen inside the
