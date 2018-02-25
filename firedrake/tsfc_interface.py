@@ -173,14 +173,16 @@ def compile_form(form, name, parameters=None, inverse=False, split=True):
 
     # We stash the compiled kernels on the form so we don't have to recompile
     # if we assemble the same form again with the same optimisations
-    if "firedrake_kernels" in form._cache:
-        # Save both kernels and TSFC params so we can tell if this
-        # cached version is valid (the TSFC parameters might have changed)
-        kernels, coffee_params, old_name, params = form._cache["firedrake_kernels"]
-        if coffee_params == default_parameters["coffee"] and \
-           name == old_name and \
-           params == parameters:
-            return kernels
+    cache = form._cache.setdefault("firedrake_kernels", {})
+
+    def tuplify(params):
+        return tuple((k, params[k]) for k in sorted(params))
+
+    key = (tuplify(default_parameters["coffee"]), name, tuplify(parameters), split)
+    try:
+        val = cache[key]
+    except KeyError:
+        pass
 
     kernels = []
     # A map from all form coefficients to their number.
@@ -189,8 +191,8 @@ def compile_form(form, name, parameters=None, inverse=False, split=True):
     if split:
         iterable = split_form(form)
     else:
-        iterable = [(0, )*len(form.arguments()), form]
-    for idx, f in split_form(form):
+        iterable = ([(0, )*len(form.arguments()), form], )
+    for idx, f in iterable:
         f = _real_mangle(f)
         # Map local coefficient numbers (as seen inside the
         # compiler) to the global coefficient numbers
@@ -201,9 +203,7 @@ def compile_form(form, name, parameters=None, inverse=False, split=True):
         for kinfo in kinfos:
             kernels.append(SplitKernel(idx, kinfo))
     kernels = tuple(kernels)
-    form._cache["firedrake_kernels"] = (kernels, default_parameters["coffee"].copy(),
-                                        name, parameters)
-    return kernels
+    return cache.setdefault(key, kernels)
 
 
 def _real_mangle(form):
